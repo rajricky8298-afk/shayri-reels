@@ -1,1 +1,41 @@
-.github/workflows/daily.yml
+
+name: Daily Shayari Video
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * *"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install FFmpeg and Hindi font
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core
+
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+
+      - name: Generate shayari video
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python main.py
+
+      - name: Save MP4 for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: shayari-reel
+          path: output/
+          retention-days: 7
+
