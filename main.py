@@ -23,6 +23,7 @@ API_URL = (
     "v1beta/models/gemini-3.5-flash:generateContent"
 )
 
+
 def generate_shayari():
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
@@ -43,11 +44,6 @@ def generate_shayari():
     }
     """
 
-    response = requests.post(
-        
-    
-    response = None
-
     for attempt in range(5):
         try:
             response = requests.post(
@@ -67,7 +63,7 @@ def generate_shayari():
             ):
                 break
 
-            print(f"Gemini temporary error: HTTP {response.status_code}")
+            print("Gemini temporary error:", response.status_code)
 
         except requests.exceptions.Timeout:
             print("Gemini request timed out.")
@@ -78,8 +74,6 @@ def generate_shayari():
             time.sleep(delay)
     else:
         raise RuntimeError("Gemini failed after 5 attempts.")
-
-
 
     if response.status_code != 200:
         print("Gemini API error:", response.status_code, response.text)
@@ -95,6 +89,7 @@ def generate_shayari():
             raise ValueError(f"AI response is missing {field}")
 
     return data
+
 
 def find_font():
     candidates = [
