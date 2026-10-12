@@ -45,6 +45,9 @@ def generate_shayari():
 
     response = requests.post(
         
+    
+    response = None
+
     for attempt in range(5):
         try:
             response = requests.post(
@@ -59,7 +62,9 @@ def generate_shayari():
                 timeout=90,
             )
 
-            if response.status_code not in (408, 429, 500, 502, 503, 504):
+            if response.status_code not in (
+                408, 429, 500, 502, 503, 504
+            ):
                 break
 
             print(f"Gemini temporary error: HTTP {response.status_code}")
@@ -68,11 +73,12 @@ def generate_shayari():
             print("Gemini request timed out.")
 
         if attempt < 4:
-            delay = min(60, 2 ** (attempt + 1)) + random.random()
-            print(f"Retrying in {delay:.1f} seconds...")
+            delay = min(60, 2 ** (attempt + 1))
+            print(f"Retrying in {delay} seconds...")
             time.sleep(delay)
     else:
         raise RuntimeError("Gemini failed after 5 attempts.")
+
 
 
     if response.status_code != 200:
