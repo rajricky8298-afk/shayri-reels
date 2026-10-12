@@ -28,6 +28,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Generate shayari video
+        if: false
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python main.py
