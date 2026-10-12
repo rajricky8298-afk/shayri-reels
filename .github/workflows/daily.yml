@@ -38,7 +38,40 @@ jobs:
           name: shayari-reel
           path: output/
           retention-days: 7  
-      
+      - name: Verify Instagram connection
+        env:
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+        run: |
+          python - <<'PY'
+          import os
+          import json
+          import urllib.request
+          import urllib.parse
+          import urllib.error
+
+          params = urllib.parse.urlencode({
+              "fields": "id,username",
+              "access_token": os.environ["INSTAGRAM_ACCESS_TOKEN"]
+          })
+          url = "https://graph.instagram.com/me?" + params
+
+          try:
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  data = json.loads(response.read().decode())
+          except urllib.error.HTTPError as e:
+              print("Instagram API returned HTTP status:", e.code)
+              raise SystemExit("Instagram connection test failed.")
+
+          print("Instagram username:", data.get("username"))
+
+          if str(data.get("id")) != os.environ["INSTAGRAM_USER_ID"]:
+              raise SystemExit(
+                  "The returned account ID does not match INSTAGRAM_USER_ID."
+              )
+
+          print("Instagram connection verified successfully.")
+          PY
      
       - name: Check available Gemini models
         env:
