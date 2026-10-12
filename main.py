@@ -52,6 +52,8 @@ def generate_shayari():
         },
         timeout=90,
     )
+    if not response.ok:
+    print("Gemini API error:", response.status_code, response.text)
     response.raise_for_status()
     result = response.json()
 
