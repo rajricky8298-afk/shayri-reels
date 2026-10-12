@@ -2,6 +2,8 @@
 import os
 import json
 import subprocess
+import time
+import random
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -42,16 +44,36 @@ def generate_shayari():
     """
 
     response = requests.post(
-        API_URL,
-        headers={"x-goog-api-key": key},
-        json={
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "responseMimeType": "application/json"
-            },
-        },
-        timeout=180,
-    )
+        
+    for attempt in range(5):
+        try:
+            response = requests.post(
+                API_URL,
+                headers={"x-goog-api-key": key},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "responseMimeType": "application/json"
+                    },
+                },
+                timeout=90,
+            )
+
+            if response.status_code not in (408, 429, 500, 502, 503, 504):
+                break
+
+            print(f"Gemini temporary error: HTTP {response.status_code}")
+
+        except requests.exceptions.Timeout:
+            print("Gemini request timed out.")
+
+        if attempt < 4:
+            delay = min(60, 2 ** (attempt + 1)) + random.random()
+            print(f"Retrying in {delay:.1f} seconds...")
+            time.sleep(delay)
+    else:
+        raise RuntimeError("Gemini failed after 5 attempts.")
+
 
     if response.status_code != 200:
         print("Gemini API error:", response.status_code, response.text)
