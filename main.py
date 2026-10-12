@@ -41,7 +41,7 @@ def generate_shayari():
     }
     """
 
-       response = requests.post(
+    response = requests.post(
         API_URL,
         headers={"x-goog-api-key": key},
         json={
