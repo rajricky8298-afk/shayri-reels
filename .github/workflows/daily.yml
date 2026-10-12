@@ -64,7 +64,8 @@ jobs:
               raise SystemExit("Instagram connection test failed.")
 
           print("Instagram username:", data.get("username"))
-
+          print("Instagram account ID:", data.get("id"))
+        
           if str(data.get("id")) != os.environ["INSTAGRAM_USER_ID"]:
               raise SystemExit(
                   "The returned account ID does not match INSTAGRAM_USER_ID."
