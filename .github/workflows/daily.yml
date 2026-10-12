@@ -37,4 +37,28 @@ jobs:
         with:
           name: shayari-reel
           path: output/
-          retention-days: 7
+          retention-days: 7  
+      
+      - name: Check available Gemini models
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          import requests
+
+          url = "https://generativelanguage.googleapis.com/v1beta/models"
+          r = requests.get(
+              url,
+              headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]},
+              timeout=30
+          )
+          print("HTTP status:", r.status_code)
+          r.raise_for_status()
+
+          models = r.json().get("models", [])
+          for model in models:
+              if "generateContent" in model.get("supportedGenerationMethods", []):
+                  print(model["name"])
+          PY
+
