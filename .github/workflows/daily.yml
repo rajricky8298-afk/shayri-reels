@@ -39,6 +39,7 @@ jobs:
           path: output/
           retention-days: 7  
       
+     
       - name: Check available Gemini models
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -56,8 +57,7 @@ jobs:
           print("HTTP status:", r.status_code)
           r.raise_for_status()
 
-          models = r.json().get("models", [])
-          for model in models:
+          for model in r.json().get("models", []):
               if "generateContent" in model.get("supportedGenerationMethods", []):
                   print(model["name"])
           PY
