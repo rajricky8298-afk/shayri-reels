@@ -1,434 +1,178 @@
 
-"""
-Hindi Shorts / Reels Video Generator
-------------------------------------
-Creates a vertical 9:16 video from:
-- AI-generated images using Gemini
-- Hindi AI narration using Gemini TTS
-- Hindi captions
-- H.264 video + AAC audio in an MP4 container
-
-Required environment variable:
-    GEMINI_API_KEY
-
-Run:
-    python main.py
-
-Change the SCENES below to make a different video.
-"""
-
-import base64
 import os
+import json
 import subprocess
-import textwrap
 from pathlib import Path
+from datetime import datetime, timezone
 
-from google import genai
+import requests
 from PIL import Image, ImageDraw, ImageFont
 
-# -------------------- SETTINGS --------------------
+ROOT = Path(__file__).parent
+OUTPUT = ROOT / "output"
+OUTPUT.mkdir(exist_ok=True)
 
-IMAGE_MODEL = "gemini-3.1-flash-image"
-VOICE_MODEL = "gemini-3.8-flash-tts"
-VOICE_NAME = "Kore"
+VIDEO = OUTPUT / "shayari_reel.mp4"
+MUSIC = ROOT / "assets" / "music.mp3"
+POST = OUTPUT / "post.json"
 
-WIDTH = 1080
-HEIGHT = 1920
-FPS = 30
+API_URL = (
+    "https://generativelanguage.googleapis.com/"
+    "v1beta/models/gemini-2.5-flash:generateContent"
+)
 
-OUTPUT_DIR = Path("output")
-WORK_DIR = OUTPUT_DIR / "work"
-FINAL_VIDEO = OUTPUT_DIR / "hindi_short.mp4"
+def generate_shayari():
+    key = os.environ.get("GEMINI_API_KEY")
+    if not key:
+        raise RuntimeError("GEMINI_API_KEY secret is missing.")
 
-# Change these scenes to create a different Short.
-# Each scene has its own narration, image prompt and Hindi caption.
-SCENES = [
+    prompt = """
+    Write one original Hindi shayari in Devanagari.
+    Theme: love, life, hope, or self-respect.
+    Exactly four short lines. Do not copy famous poetry
+    or song lyrics.
+
+    Return only JSON in this format:
     {
-        "narration": (
-            "क्या आप जानते हैं कि मोना लिसा की मुस्कान "
-            "आज भी दुनिया के सबसे बड़े रहस्यों में से एक है?"
-        ),
-        "caption": "मोना लिसा की रहस्यमयी मुस्कान",
-        "image_prompt": (
-            "Vertical 9:16 cinematic documentary image of the "
-            "Mona Lisa painting inside a historic art museum, "
-            "mysterious atmosphere, realistic oil painting, "
-            "dramatic soft lighting, highly detailed, no text, "
-            "no letters, no watermark."
-        ),
-    },
-    {
-        "narration": (
-            "इस मशहूर पेंटिंग को लियोनार्डो दा विंची ने "
-            "पुनर्जागरण काल में बनाया था।"
-        ),
-        "caption": "लियोनार्डो दा विंची की उत्कृष्ट कृति",
-        "image_prompt": (
-            "Vertical 9:16 cinematic historical scene of "
-            "Leonardo da Vinci working in a Renaissance-era "
-            "Florentine studio, old notebooks, brushes and "
-            "paintings, historically inspired, warm candlelight, "
-            "realistic documentary photography, no text, no watermark."
-        ),
-    },
-    {
-        "narration": (
-            "लेकिन सबसे हैरान करने वाली बात यह है कि "
-            "उसकी मुस्कान कभी साफ दिखाई देती है और कभी गायब लगती है।"
-        ),
-        "caption": "क्या उसकी मुस्कान बदलती है?",
-        "image_prompt": (
-            "Vertical 9:16 extreme close-up of the Mona Lisa's "
-            "face and subtle smile, soft shadows, mysterious "
-            "museum lighting, detailed Renaissance oil painting, "
-            "cinematic composition, no text, no watermark."
-        ),
-    },
-    {
-        "narration": (
-            "इसका एक कारण है लियोनार्डो की खास तकनीक, "
-            "जिसमें रोशनी और छाया धीरे-धीरे एक-दूसरे में घुलती हैं।"
-        ),
-        "caption": "रोशनी और छाया का जादू",
-        "image_prompt": (
-            "Vertical 9:16 close-up artistic study of a Renaissance "
-            "portrait showing subtle transitions between light and "
-            "shadow, layered oil paint texture, museum-quality art, "
-            "cinematic soft lighting, no text, no watermark."
-        ),
-    },
-    {
-        "narration": (
-            "शायद यही वजह है कि पाँच सौ साल बाद भी "
-            "लोग उसकी मुस्कान का रहस्य खोज रहे हैं।"
-        ),
-        "caption": "रहस्य आज भी कायम है",
-        "image_prompt": (
-            "Vertical 9:16 cinematic view of the Mona Lisa painting "
-            "behind protective museum glass, visitors softly blurred "
-            "in the background, mysterious and elegant atmosphere, "
-            "realistic documentary style, no text, no watermark."
-        ),
-    },
-]
+      "title": "short Hindi title",
+      "shayari": "line one\\nline two\\nline three\\nline four",
+      "caption": "short Hindi caption",
+      "hashtags": ["#HindiShayari", "#Shayari"]
+    }
+    """
 
-# -------------------- HELPERS --------------------
-
-
-def run_command(command):
-    """Run a system command and show useful errors."""
-    try:
-        subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError(
-            f"Required program not found: {command[0]}. "
-            "Install FFmpeg and ensure it is on PATH."
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            f"Command failed: {' '.join(command)}\n"
-            f"{exc.stderr[-3000:]}"
-        ) from exc
-
-
-def get_audio_duration(audio_path):
-    """Read audio duration using FFprobe."""
-    result = subprocess.run(
-        [
-            "ffprobe",
-            "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            str(audio_path),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
+    response = requests.post(
+        API_URL,
+        headers={"x-goog-api-key": key},
+        json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseMimeType": "application/json"
+            },
+        },
+        timeout=90,
     )
-    return float(result.stdout.strip())
+    response.raise_for_status()
+    result = response.json()
 
+    raw = result["candidates"][0]["content"]["parts"][0]["text"]
+    data = json.loads(raw)
 
-def get_hindi_font(size):
-    """Find a Devanagari-capable font."""
+    for field in ("title", "shayari", "caption", "hashtags"):
+        if field not in data:
+            raise ValueError(f"AI response is missing {field}")
+
+    return data
+
+def find_font():
     candidates = [
-        os.getenv("HINDI_FONT", ""),
         "/usr/share/fonts/truetype/noto/"
         "NotoSansDevanagari-Regular.ttf",
         "/usr/share/fonts/truetype/noto/"
         "NotoSansDevanagariUI-Regular.ttf",
-        "C:/Windows/Fonts/Nirmala.ttf",
-        "C:/Windows/Fonts/mangal.ttf",
     ]
+    for path in candidates:
+        if Path(path).exists():
+            return path
+    raise FileNotFoundError("Hindi Devanagari font not found.")
 
-    for candidate in candidates:
-        if candidate and Path(candidate).is_file():
-            return ImageFont.truetype(candidate, size)
+def create_background():
+    width, height = 720, 1280
+    image = Image.new("RGB", (width, height))
+    pixels = image.load()
 
-    raise FileNotFoundError(
-        "Hindi font not found. Install Noto Sans Devanagari "
-        "or set HINDI_FONT to the font's full file path."
-    )
-
-
-def wrap_caption(text, width=22):
-    """Wrap Hindi text into short caption lines."""
-    return "\n".join(textwrap.wrap(text, width=width))
-
-
-def add_caption(image_path, caption):
-    """Draw a readable Hindi caption over an AI image."""
-    image = Image.open(image_path).convert("RGB")
-    image = image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
-
-    overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    font = get_hindi_font(56)
-
-    caption_text = wrap_caption(caption)
-    box = draw.multiline_textbbox(
-        (0, 0),
-        caption_text,
-        font=font,
-        spacing=16,
-        align="center",
-        stroke_width=0,
-    )
-
-    text_width = box[2] - box[0]
-    text_height = box[3] - box[1]
-
-    padding_x = 36
-    padding_y = 28
-
-    x1 = (WIDTH - text_width) // 2 - padding_x
-    y1 = HEIGHT - text_height - 190 - padding_y
-    x2 = (WIDTH + text_width) // 2 + padding_x
-    y2 = HEIGHT - 190 + padding_y
-
-    draw.rounded_rectangle(
-        (x1, y1, x2, y2),
-        radius=24,
-        fill=(0, 0, 0, 175),
-    )
-
-    draw.multiline_text(
-        ((WIDTH - text_width) // 2, y1 + padding_y - box[1]),
-        caption_text,
-        font=font,
-        fill=(255, 255, 255, 255),
-        spacing=16,
-        align="center",
-        stroke_width=1,
-        stroke_fill=(0, 0, 0, 255),
-    )
-
-    Image.alpha_composite(overlay, image.convert("RGBA")).convert(
-        "RGB"
-    ).save(image_path, quality=95)
-
-
-def generate_image(client, prompt, output_path):
-    """Generate one vertical image using Gemini."""
-    response = client.interactions.create(
-        model=IMAGE_MODEL,
-        input=prompt,
-        response_format={
-            "type": "image",
-            "mime_type": "image/jpeg",
-            "aspect_ratio": "9:16",
-            "image_size": "1K",
-        },
-    )
-
-    image_data = getattr(response.output_image, "data", None)
-    if not image_data:
-        raise RuntimeError(
-            "Gemini returned no image. Check the API key, model "
-            "availability and API response."
-        )
-
-    output_path.write_bytes(base64.b64decode(image_data))
-    add_caption(output_path, prompt_caption(prompt))
-
-
-def prompt_caption(prompt):
-    """Unused fallback helper; captions are added in main()."""
-    return ""
-
-
-def generate_voice(client, narration, output_path):
-    """Generate Hindi speech and save the returned WAV audio."""
-    response = client.interactions.create(
-        model=VOICE_MODEL,
-        input=[
-            {
-                "type": "user_input",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": narration,
-                        "annotations": [
-                            {
-                                "type": "speech_metadata",
-                                "style": (
-                                    "Natural Hindi narration, clear "
-                                    "Indian Hindi pronunciation, "
-                                    "engaging documentary voice, "
-                                    "moderate pace."
-                                ),
-                            }
-                        ],
-                    }
-                ],
-            }
-        ],
-        response_format={"type": "audio"},
-        generation_config={
-            "speech_config": [{"voice": VOICE_NAME}]
-        },
-    )
-
-    audio_data = getattr(response.output_audio, "data", None)
-    if not audio_data:
-        raise RuntimeError(
-            "Gemini returned no audio. Check TTS model availability "
-            "and your API access."
-        )
-
-    output_path.write_bytes(base64.b64decode(audio_data))
-
-
-def make_scene_clip(image_path, audio_path, clip_path):
-    """Create a scene clip with H.264 video and AAC audio."""
-    duration = get_audio_duration(audio_path)
-
-    run_command(
-        [
-            "ffmpeg",
-            "-y",
-            "-loop", "1",
-            "-framerate", str(FPS),
-            "-i", str(image_path),
-            "-i", str(audio_path),
-            "-t", f"{duration:.3f}",
-            "-vf",
-            (
-                f"scale={WIDTH}:{HEIGHT}:"
-                "force_original_aspect_ratio=increase,"
-                f"crop={WIDTH}:{HEIGHT},"
-                f"fps={FPS},format=yuv420p"
-            ),
-            "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-crf", "23",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-ar", "44100",
-            "-ac", "2",
-            "-shortest",
-            "-movflags", "+faststart",
-            str(clip_path),
-        ]
-    )
-
-
-def combine_clips(clip_paths):
-    """Join all scene clips into the final MP4."""
-    concat_file = WORK_DIR / "clips.txt"
-
-    with concat_file.open("w", encoding="utf-8") as file:
-        for clip in clip_paths:
-            # The generated filenames contain no apostrophes.
-            file.write(f"file '{clip.resolve().as_posix()}'\n")
-
-    run_command(
-        [
-            "ffmpeg",
-            "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", str(concat_file),
-            "-c:v", "libx264",
-            "-preset", "veryfast",
-            "-crf", "23",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac",
-            "-b:a", "192k",
-            "-ar", "44100",
-            "-ac", "2",
-            "-movflags", "+faststart",
-            str(FINAL_VIDEO),
-        ]
-    )
-
-
-# -------------------- MAIN PROGRAM --------------------
-
-
-def main():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "GEMINI_API_KEY is missing. Add it to your environment "
-            "or GitHub Actions secrets."
-        )
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    WORK_DIR.mkdir(parents=True, exist_ok=True)
-
-    client = genai.Client(api_key=api_key)
-    clip_paths = []
-
-    print(f"Generating {len(SCENES)} scenes...")
-
-    for index, scene in enumerate(SCENES, start=1):
-        print(f"\nScene {index}/{len(SCENES)}")
-
-        image_path = WORK_DIR / f"scene_{index:02d}.jpg"
-        audio_path = WORK_DIR / f"scene_{index:02d}.wav"
-        clip_path = WORK_DIR / f"clip_{index:02d}.mp4"
-
-        print("Generating AI image...")
-        response = client.interactions.create(
-            model=IMAGE_MODEL,
-            input=scene["image_prompt"],
-            response_format={
-                "type": "image",
-                "mime_type": "image/jpeg",
-                "aspect_ratio": "9:16",
-                "image_size": "1K",
-            },
-        )
-
-        image_data = getattr(response.output_image, "data", None)
-        if not image_data:
-            raise RuntimeError(
-                f"No image returned for scene {index}."
+    for y in range(height):
+        for x in range(width):
+            glow = max(0, 1 - abs(x - width / 2) / 500)
+            pixels[x, y] = (
+                int(12 + 12 * glow),
+                int(15 + 18 * y / height),
+                int(38 + 50 * glow),
             )
 
-        image_path.write_bytes(base64.b64decode(image_data))
-        add_caption(image_path, scene["caption"])
+    return image
 
-        print("Generating Hindi narration...")
-        generate_voice(client, scene["narration"], audio_path)
+def create_video(data):
+    if not MUSIC.exists():
+        raise FileNotFoundError(
+            "Music missing: upload assets/music.mp3"
+        )
 
-        print("Building scene clip...")
-        make_scene_clip(image_path, audio_path, clip_path)
-        clip_paths.append(clip_path)
+    font_path = find_font()
+    image = create_background()
+    draw = ImageDraw.Draw(image)
 
-    print("\nCombining clips...")
-    combine_clips(clip_paths)
+    title_font = ImageFont.truetype(font_path, 32)
+    poem_font = ImageFont.truetype(font_path, 40)
+    footer_font = ImageFont.truetype(font_path, 24)
 
-    print("\nVideo generated successfully!")
-    print(f"Output file: {FINAL_VIDEO.resolve()}")
-    print("Format: MP4 / H.264 video / AAC audio")
-    print("Resolution: 1080 x 1920 (vertical 9:16)")
+    draw.text(
+        (360, 245), data["title"],
+        font=title_font, fill=(255, 215, 150), anchor="mm"
+    )
 
+    # Split at word boundaries and keep lines within the frame.
+    words = data["shayari"].replace("\n", " ").split()
+    lines = []
+    current = ""
+
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if draw.textbbox((0, 0), candidate, font=poem_font)[2] <= 620:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+
+    if current:
+        lines.append(current)
+
+    lines = lines[:8]
+    line_height = 78
+    start_y = (640 - len(lines) * line_height / 2)
+
+    for index, line in enumerate(lines):
+        draw.text(
+            (360, int(start_y + index * line_height)),
+            line,
+            font=poem_font,
+            fill="white",
+            anchor="mm",
+            stroke_width=1,
+            stroke_fill=(10, 10, 25),
+        )
+
+    draw.text(
+        (360, 1080), "दिल से महसूस करें",
+        font=footer_font, fill=(255, 215, 150), anchor="mm"
+    )
+
+    still = OUTPUT / "background.jpg"
+    image.save(still, quality=95)
+
+    subprocess.run([
+        "ffmpeg", "-y",
+        "-loop", "1", "-framerate", "24", "-i", str(still),
+        "-stream_loop", "-1", "-i", str(MUSIC),
+        "-t", "20",
+        "-vf", "scale=720:1280,fps=24,format=yuv420p",
+        "-c:v", "libx264", "-preset", "ultrafast",
+        "-c:a", "aac", "-b:a", "128k",
+        "-shortest", "-movflags", "+faststart",
+        str(VIDEO),
+    ], check=True)
+
+def main():
+    data = generate_shayari()
+    create_video(data)
+
+    data["date"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    POST.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print("Created:", VIDEO)
 
 if __name__ == "__main__":
     main()
