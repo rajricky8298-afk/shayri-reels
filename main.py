@@ -42,11 +42,16 @@ def generate_shayari():
     """
 
    response = requests.post(
-    url,
-    headers=headers,
-    json=payload,
-    timeout=180
-)
+        API_URL,
+        headers={"x-goog-api-key": key},
+        json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseMimeType": "application/json"
+            },
+        },
+        timeout=180,
+    )
 
     if response.status_code != 200:
         print("Gemini API error:", response.status_code, response.text)
