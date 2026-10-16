@@ -37,7 +37,8 @@ jobs:
         with:
           name: shayari-reel
           path: output/
-          retention-days: 7  
+          retention-days: 7
+
       - name: Verify Instagram connection
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
@@ -54,32 +55,30 @@ jobs:
               "fields": "id,username",
               "access_token": os.environ["INSTAGRAM_ACCESS_TOKEN"]
           })
+
           url = "https://graph.instagram.com/me?" + params
 
-          
-   
-    try:
-        with urllib.request.urlopen(url, timeout=30) as response:
-            data = json.loads(response.read().decode())
-    except urllib.error.HTTPError as e:
-        print("Instagram API returned HTTP status:", e.code)
-        try:
-            error_data = json.loads(e.read().decode())
-            print(
-                "Instagram error:",
-                error_data.get("error", {}).get(
-                    "message", "No error details returned"
-                )
-            )
-        except Exception:
-            print("Could not read Instagram error details.")
+          try:
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  data = json.loads(response.read().decode())
+          except urllib.error.HTTPError as e:
+              print("Instagram API returned HTTP status:", e.code)
+              try:
+                  error_data = json.loads(e.read().decode())
+                  print(
+                      "Instagram error:",
+                      error_data.get("error", {}).get(
+                          "message", "No error details returned"
+                      )
+                  )
+              except Exception:
+                  print("Could not read Instagram error details.")
 
-        raise SystemExit("Instagram connection test failed.")
-
+              raise SystemExit("Instagram connection test failed.")
 
           print("Instagram username:", data.get("username"))
           print("Instagram account ID:", data.get("id"))
-        
+
           if str(data.get("id")) != os.environ["INSTAGRAM_USER_ID"]:
               raise SystemExit(
                   "The returned account ID does not match INSTAGRAM_USER_ID."
@@ -87,7 +86,7 @@ jobs:
 
           print("Instagram connection verified successfully.")
           PY
-     
+
       - name: Check available Gemini models
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -97,19 +96,25 @@ jobs:
           import requests
 
           url = "https://generativelanguage.googleapis.com/v1beta/models"
+
           r = requests.get(
               url,
-              headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]},
+              headers={
+                  "x-goog-api-key": os.environ["GEMINI_API_KEY"]
+              },
               timeout=30
           )
+
           print("HTTP status:", r.status_code)
           r.raise_for_status()
 
           for model in r.json().get("models", []):
-              if "generateContent" in model.get("supportedGenerationMethods", []):
+              if "generateContent" in model.get(
+                  "supportedGenerationMethods", []
+              ):
                   print(model["name"])
           PY
-       
+
       - name: Install Cloudinary package
         run: pip install cloudinary
 
@@ -138,11 +143,11 @@ jobs:
               folder="shayari-reels",
           )
 
-          url = result["secure_url"]
+          video_url = result["secure_url"]
+
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              f.write(f"video_url={url}\n")
+              f.write(f"video_url={video_url}\n")
 
           print("Video uploaded successfully.")
-          print("Public video URL:", url)
+          print("Public video URL:", video_url)
           PY
-
