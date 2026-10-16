@@ -95,4 +95,40 @@ jobs:
               if "generateContent" in model.get("supportedGenerationMethods", []):
                   print(model["name"])
           PY
+       
+      - name: Install Cloudinary package
+        run: pip install cloudinary
+
+      - name: Upload video to Cloudinary
+        id: cloudinary_upload
+        env:
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+        run: |
+          python - <<'PY'
+          import os
+          import cloudinary
+          import cloudinary.uploader
+
+          cloudinary.config(
+              cloud_name=os.environ["CLOUDINARY_CLOUD_NAME"],
+              api_key=os.environ["CLOUDINARY_API_KEY"],
+              api_secret=os.environ["CLOUDINARY_API_SECRET"],
+              secure=True,
+          )
+
+          result = cloudinary.uploader.upload(
+              "output/shayari_reel.mp4",
+              resource_type="video",
+              folder="shayari-reels",
+          )
+
+          url = result["secure_url"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"video_url={url}\n")
+
+          print("Video uploaded successfully.")
+          print("Public video URL:", url)
+          PY
 
