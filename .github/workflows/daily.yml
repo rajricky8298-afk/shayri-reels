@@ -56,23 +56,25 @@ jobs:
           })
           url = "https://graph.instagram.com/me?" + params
 
-          try:
-              with urllib.request.urlopen(url, timeout=30) as response:
-                  data = json.loads(response.read().decode())
-                    except urllib.error.HTTPError as e:
-              print("Instagram API returned HTTP status:", e.code)
-              try:
-                  error_data = json.loads(e.read().decode())
-                  print(
-                      "Instagram error:",
-                      error_data.get("error", {}).get(
-                          "message", "No error details returned"
-                      )
-                  )
-              except Exception:
-                  print("Could not read Instagram error details.")
+          
+    try:
+        with urllib.request.urlopen(url, timeout=30) as response:
+            data = json.loads(response.read().decode())
+    except urllib.error.HTTPError as e:
+        print("Instagram API returned HTTP status:", e.code)
+        try:
+            error_data = json.loads(e.read().decode())
+            print(
+                "Instagram error:",
+                error_data.get("error", {}).get(
+                    "message", "No error details returned"
+                )
+            )
+        except Exception:
+            print("Could not read Instagram error details.")
 
-              raise SystemExit("Instagram connection test failed.")
+        raise SystemExit("Instagram connection test failed.")
+
 
           print("Instagram username:", data.get("username"))
           print("Instagram account ID:", data.get("id"))
